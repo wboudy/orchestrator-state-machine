@@ -1,2 +1,5 @@
 # bv (beads viewer) local config and caches
 .bv/
+
+# watcher runtime logs/artifacts
+.automation/

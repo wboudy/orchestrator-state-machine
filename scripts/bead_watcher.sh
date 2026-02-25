@@ -153,7 +153,50 @@ Execution contract:
 EOF
 }
 
-declare -A retries=()
+retry_keys=()
+retry_vals=()
+
+get_retry_count() {
+  local key="$1"
+  local i
+  for ((i = 0; i < ${#retry_keys[@]}; i++)); do
+    if [[ "${retry_keys[$i]}" == "$key" ]]; then
+      echo "${retry_vals[$i]}"
+      return 0
+    fi
+  done
+  echo 0
+}
+
+set_retry_count() {
+  local key="$1"
+  local val="$2"
+  local i
+  for ((i = 0; i < ${#retry_keys[@]}; i++)); do
+    if [[ "${retry_keys[$i]}" == "$key" ]]; then
+      retry_vals[$i]="$val"
+      return 0
+    fi
+  done
+  retry_keys+=("$key")
+  retry_vals+=("$val")
+}
+
+clear_retry_count() {
+  local key="$1"
+  local i
+  local new_keys=()
+  local new_vals=()
+  for ((i = 0; i < ${#retry_keys[@]}; i++)); do
+    if [[ "${retry_keys[$i]}" != "$key" ]]; then
+      new_keys+=("${retry_keys[$i]}")
+      new_vals+=("${retry_vals[$i]}")
+    fi
+  done
+  retry_keys=("${new_keys[@]}")
+  retry_vals=("${new_vals[@]}")
+}
+
 consecutive_failures=0
 no_progress_cycles=0
 last_snapshot=""
@@ -168,7 +211,7 @@ for ((cycle = 1; cycle <= MAX_CYCLES; cycle++)); do
   fi
 
   log "Cycle $cycle: selected $issue_id"
-  attempts="${retries[$issue_id]:-0}"
+  attempts="$(get_retry_count "$issue_id")"
 
   if [[ "$attempts" -ge "$MAX_RETRIES_PER_ISSUE" ]]; then
     esc_title="Human escalation: $issue_id exceeded watcher retries"
@@ -178,7 +221,7 @@ for ((cycle = 1; cycle <= MAX_CYCLES; cycle++)); do
     bd update "$issue_id" --status blocked --notes "Auto-blocked by watcher after retry exhaustion; see $escalation_id for human decision." >/dev/null
     maybe_notify_human "$issue_id" "$escalation_id"
     log "Blocked $issue_id after retry exhaustion and created escalation bead $escalation_id"
-    unset 'retries[$issue_id]'
+    clear_retry_count "$issue_id"
     consecutive_failures=0
     continue
   fi
@@ -192,15 +235,21 @@ for ((cycle = 1; cycle <= MAX_CYCLES; cycle++)); do
 
   codex_rc=0
   if [[ -n "$CODEX_SESSION_ID" ]]; then
-    if ! codex -C "$ROOT_DIR" exec resume "$CODEX_SESSION_ID" -m "$MODEL" -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+    if codex -C "$ROOT_DIR" exec resume "$CODEX_SESSION_ID" -m "$MODEL" - < "$prompt_file" > "$console_log" 2>&1; then
+      codex_rc=0
+    else
       codex_rc=$?
     fi
   elif [[ "$CODEX_RESUME_LAST" == "1" ]]; then
-    if ! codex -C "$ROOT_DIR" exec resume --last -m "$MODEL" -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+    if codex -C "$ROOT_DIR" exec resume --last -m "$MODEL" - < "$prompt_file" > "$console_log" 2>&1; then
+      codex_rc=0
+    else
       codex_rc=$?
     fi
   else
-    if ! codex -C "$ROOT_DIR" -m "$MODEL" -s "$CODEX_SANDBOX" -a "$CODEX_APPROVAL" exec -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+    if codex -C "$ROOT_DIR" -m "$MODEL" -s "$CODEX_SANDBOX" -a "$CODEX_APPROVAL" exec -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+      codex_rc=0
+    else
       codex_rc=$?
     fi
   fi
@@ -209,17 +258,17 @@ for ((cycle = 1; cycle <= MAX_CYCLES; cycle++)); do
     status="$(bd show "$issue_id" --json | jq -r '.[0].status')"
     if [[ "$status" == "closed" || "$status" == "blocked" ]]; then
       log "Issue $issue_id ended in status=$status (success)"
-      unset 'retries[$issue_id]'
+      clear_retry_count "$issue_id"
       consecutive_failures=0
     else
-      retries[$issue_id]=$((attempts + 1))
+      set_retry_count "$issue_id" "$((attempts + 1))"
       consecutive_failures=$((consecutive_failures + 1))
-      log "Issue $issue_id still status=$status; retry ${retries[$issue_id]}/$MAX_RETRIES_PER_ISSUE"
+      log "Issue $issue_id still status=$status; retry $(get_retry_count "$issue_id")/$MAX_RETRIES_PER_ISSUE"
     fi
   else
-    retries[$issue_id]=$((attempts + 1))
+    set_retry_count "$issue_id" "$((attempts + 1))"
     consecutive_failures=$((consecutive_failures + 1))
-    log "codex run failed for $issue_id (rc=$codex_rc); retry ${retries[$issue_id]}/$MAX_RETRIES_PER_ISSUE"
+    log "codex run failed for $issue_id (rc=$codex_rc); retry $(get_retry_count "$issue_id")/$MAX_RETRIES_PER_ISSUE"
   fi
 
   snapshot_after="$(ready_snapshot)"
