@@ -45,6 +45,10 @@ Use this order:
 
 Do not silently skip failures. Every unresolved blocker must have a bead.
 
+Reference workflow:
+
+- `skills/bug-blocker-spinout/SKILL.md` defines the standard spinout pattern.
+
 ## Optional Watcher Mode
 
 For unattended execution, run:
@@ -59,6 +63,7 @@ Watcher expectations:
 - It must stop when no ready beads remain.
 - It enforces max retries/no-progress caps to prevent infinite loops.
 - For complex bugs discovered mid-implementation, it should create a dedicated bug bead, block the parent bead, and prioritize the bug bead next.
+- It uses `prompts/long-horizon-bead-work.md` by default (override via `PROMPT_TEMPLATE`).
 
 ## Quick Reference
 

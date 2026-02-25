@@ -29,6 +29,7 @@ Environment variables:
   CODEX_APPROVAL            Codex approval mode (default: never)
   CODEX_SESSION_ID          Resume this Codex session id each cycle (default: empty)
   CODEX_RESUME_LAST         If 1, use codex exec resume --last when session id empty
+  PROMPT_TEMPLATE           Prompt template path (default: prompts/long-horizon-bead-work.md)
   HUMAN_ESCALATION_CMD      Optional shell command for human escalation
   QUIET_HOURS_START         Quiet hours start (0-23, default: 22)
   QUIET_HOURS_END           Quiet hours end (0-23, default: 8)
@@ -72,6 +73,7 @@ CODEX_SANDBOX="${CODEX_SANDBOX:-workspace-write}"
 CODEX_APPROVAL="${CODEX_APPROVAL:-never}"
 CODEX_SESSION_ID="${CODEX_SESSION_ID:-}"
 CODEX_RESUME_LAST="${CODEX_RESUME_LAST:-0}"
+PROMPT_TEMPLATE="${PROMPT_TEMPLATE:-prompts/long-horizon-bead-work.md}"
 HUMAN_ESCALATION_CMD="${HUMAN_ESCALATION_CMD:-}"
 QUIET_HOURS_START="${QUIET_HOURS_START:-22}"
 QUIET_HOURS_END="${QUIET_HOURS_END:-8}"
@@ -119,6 +121,38 @@ maybe_notify_human() {
   WATCHER_ISSUE_ID="$issue_id" WATCHER_ESCALATION_ID="$escalation_id" bash -lc "$HUMAN_ESCALATION_CMD" || true
 }
 
+render_prompt() {
+  local issue_id="$1"
+  local output_path="$2"
+  local template_path="$ROOT_DIR/$PROMPT_TEMPLATE"
+  local escaped_issue escaped_root
+
+  escaped_issue="$(printf '%s' "$issue_id" | sed 's/[\/&]/\\&/g')"
+  escaped_root="$(printf '%s' "$ROOT_DIR" | sed 's/[\/&]/\\&/g')"
+
+  if [[ -f "$template_path" ]]; then
+    sed -e "s/{{ISSUE_ID}}/${escaped_issue}/g" \
+        -e "s/{{ROOT_DIR}}/${escaped_root}/g" \
+        "$template_path" > "$output_path"
+    return 0
+  fi
+
+  cat > "$output_path" <<EOF
+Work exactly one bead: $issue_id
+
+Execution contract:
+1) Show and claim this bead (set in_progress if not already).
+2) Implement and validate to satisfy acceptance criteria.
+3) If you hit an easy/trivial fix while implementing, fix inline and continue.
+4) If you find a non-trivial/complex bug, do NOT patch blindly:
+   - create a dedicated bug bead with reproduction details,
+   - make $issue_id depend on that bug bead and set $issue_id to blocked with notes,
+   - switch focus to the bug bead and attempt to resolve it first.
+5) Leave bead state deterministic at end: closed (done) OR blocked (waiting), never ambiguous.
+6) Follow AGENTS.md session-end requirements including sync and push.
+EOF
+}
+
 declare -A retries=()
 consecutive_failures=0
 no_progress_cycles=0
@@ -154,20 +188,7 @@ for ((cycle = 1; cycle <= MAX_CYCLES; cycle++)); do
   output_file="$LOG_DIR/last-message-$run_id.txt"
   console_log="$LOG_DIR/console-$run_id.log"
 
-  cat > "$prompt_file" <<EOF
-Work exactly one bead: $issue_id
-
-Execution contract:
-1) Show and claim this bead (set in_progress if not already).
-2) Implement and validate to satisfy acceptance criteria.
-3) If you hit an easy/trivial fix while implementing, fix inline and continue.
-4) If you find a non-trivial/complex bug, do NOT patch blindly:
-   - create a dedicated bug bead with reproduction details,
-   - make $issue_id depend on that bug bead and set $issue_id to blocked with notes,
-   - switch focus to the bug bead and attempt to resolve it first.
-5) Leave bead state deterministic at end: closed (done) OR blocked (waiting), never ambiguous.
-6) Follow AGENTS.md session-end requirements including sync and push.
-EOF
+  render_prompt "$issue_id" "$prompt_file"
 
   codex_rc=0
   if [[ -n "$CODEX_SESSION_ID" ]]; then

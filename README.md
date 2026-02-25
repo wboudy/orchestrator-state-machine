@@ -74,12 +74,14 @@ Key behavior:
 - Stops automatically when no ready beads remain.
 - Uses finite guards (`MAX_CYCLES`, `MAX_RETRIES_PER_ISSUE`, `MAX_NO_PROGRESS_CYCLES`) to avoid infinite loops.
 - If an issue repeatedly fails, it auto-creates a human-escalation bead and blocks the parent issue.
+- Uses a versioned long-horizon prompt template: `prompts/long-horizon-bead-work.md`.
 
 Useful overrides:
 
 ```bash
 MODEL=gpt-5 MAX_RETRIES_PER_ISSUE=2 scripts/bead_watcher.sh
 HUMAN_ESCALATION_CMD='echo "Escalate $WATCHER_ISSUE_ID via $WATCHER_ESCALATION_ID"' scripts/bead_watcher.sh
+PROMPT_TEMPLATE=prompts/long-horizon-bead-work.md scripts/bead_watcher.sh
 ```
 
 To keep reactivating the same Codex session instead of creating fresh runs:
@@ -89,6 +91,10 @@ CODEX_SESSION_ID=<session-id> scripts/bead_watcher.sh
 # or
 CODEX_RESUME_LAST=1 scripts/bead_watcher.sh
 ```
+
+Complex blocker skill:
+
+- `skills/bug-blocker-spinout/SKILL.md` defines the rule for turning non-trivial blockers into dedicated bug beads and switching focus safely.
 
 ## Troubleshooting Quick Hits
 
