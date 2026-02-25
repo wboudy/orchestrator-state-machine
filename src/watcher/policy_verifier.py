@@ -4,20 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
 
 from watcher.policy_defaults import EffectivePolicySnapshot, PolicyDefaultsError, inject_canonical_defaults
-
-
-SPEC_PRECEDENCE_ORDER: Tuple[str, ...] = (
-    "policy_load_parse",
-    "schema_validity",
-    "fsm_invariants",
-    "dead_letter_guard",
-    "failure_class_retryable",
-    "criticality_bypass",
-    "risk_budget",
-    "time_window_routing",
-    "dedupe_suppression",
-    "signature_trust_routing",
-)
+from watcher.policy_precedence import PRECEDENCE_ORDER as SPEC_PRECEDENCE_ORDER
 
 
 @dataclass(frozen=True)
