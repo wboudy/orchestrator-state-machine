@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 from typing import Any, Dict
 
 from watcher.error_classifier import classify_error
@@ -49,23 +50,29 @@ def parse_command_envelope(payload: Dict[str, Any]) -> CommandEnvelope:
     if missing:
         raise CommandAdapterError("missing command envelope fields: " + ",".join(missing))
 
-    run_id = payload["run_id"]
-    if not isinstance(run_id, str) or not run_id.strip():
+    run_id_raw = payload["run_id"]
+    if not isinstance(run_id_raw, str):
+        raise CommandAdapterError("run_id invalid")
+    run_id = run_id_raw.strip()
+    if not run_id:
         raise CommandAdapterError("run_id invalid")
 
-    exit_code = payload["exit_code"]
-    if isinstance(exit_code, bool) or not isinstance(exit_code, int):
-        raise CommandAdapterError("exit_code invalid")
+    exit_code = _coerce_exit_code(payload["exit_code"])
 
     raw_status = payload["status"]
+    if not isinstance(raw_status, str):
+        raise CommandAdapterError("status invalid")
+    normalized_status = raw_status.strip().lower()
     try:
-        status = CommandStatus(raw_status)
+        status = CommandStatus(normalized_status)
     except ValueError as exc:
         raise CommandAdapterError("status invalid") from exc
 
     error_class = payload.get("error_class")
-    if error_class is not None and (not isinstance(error_class, str) or not error_class.strip()):
-        raise CommandAdapterError("error_class invalid")
+    if error_class is not None:
+        if not isinstance(error_class, str):
+            raise CommandAdapterError("error_class invalid")
+        error_class = error_class.strip() or None
 
     return CommandEnvelope(
         run_id=run_id,
@@ -150,3 +157,31 @@ def _failure_reconciliation(
         requires_reconciliation=requires_reconciliation,
         reason=reason,
     )
+
+
+def _coerce_exit_code(raw_exit_code: Any) -> int:
+    """Coerce exit_code payloads to integers while rejecting ambiguous values."""
+    if isinstance(raw_exit_code, bool):
+        raise CommandAdapterError("exit_code invalid")
+
+    if isinstance(raw_exit_code, int):
+        return raw_exit_code
+
+    if isinstance(raw_exit_code, float):
+        if not math.isfinite(raw_exit_code) or not raw_exit_code.is_integer():
+            raise CommandAdapterError("exit_code invalid")
+        return int(raw_exit_code)
+
+    if isinstance(raw_exit_code, str):
+        stripped = raw_exit_code.strip()
+        if not stripped:
+            raise CommandAdapterError("exit_code invalid")
+        try:
+            parsed = float(stripped)
+        except ValueError as exc:
+            raise CommandAdapterError("exit_code invalid") from exc
+        if not math.isfinite(parsed) or not parsed.is_integer():
+            raise CommandAdapterError("exit_code invalid")
+        return int(parsed)
+
+    raise CommandAdapterError("exit_code invalid")

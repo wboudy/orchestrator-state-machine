@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable, List, Set
+from typing import Any, Iterable, List, Set
 
 
 PRIMARY_STATE_LABELS = [
@@ -23,8 +23,8 @@ class InvariantResult:
     error_class: str | None = None
 
 
-def validate_and_normalize_labels(labels: Iterable[str]) -> InvariantResult:
-    label_set: Set[str] = set(labels)
+def validate_and_normalize_labels(labels: Iterable[str] | Any) -> InvariantResult:
+    label_set = _coerce_labels(labels)
     violations: List[str] = []
     action = "unchanged"
     error_class = None
@@ -102,3 +102,29 @@ def _ordered_labels(label_set: Set[str]) -> List[str]:
     ordered.extend(non_state)
     return ordered
 
+
+def _coerce_labels(raw_labels: Iterable[str] | Any) -> Set[str]:
+    """Normalize mixed label payload shapes into a lowercase string set."""
+    labels: Set[str] = set()
+
+    if raw_labels is None:
+        return labels
+
+    if isinstance(raw_labels, str):
+        for token in raw_labels.replace(",", " ").split():
+            normalized = token.strip().lower()
+            if normalized:
+                labels.add(normalized)
+        return labels
+
+    if isinstance(raw_labels, (list, tuple, set)):
+        for item in raw_labels:
+            labels.update(_coerce_labels(item))
+        return labels
+
+    if isinstance(raw_labels, dict):
+        labels.update(_coerce_labels(raw_labels.get("labels")))
+        labels.update(_coerce_labels(raw_labels.get("label")))
+        return labels
+
+    return labels

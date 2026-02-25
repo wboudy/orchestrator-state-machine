@@ -50,7 +50,31 @@ class LabelInvariantTests(unittest.TestCase):
         self.assertEqual(result.error_class, ERROR_CLASS_FSM_INVALID)
         self.assertEqual(result.normalized_labels[:2], ["orchestrator:dead", "needs:human"])
 
+    def test_mixed_label_shapes_are_normalized(self) -> None:
+        result = validate_and_normalize_labels(
+            {
+                "labels": [
+                    "ORCHESTRATOR:RUNNING",
+                    {"label": "Model:Deep"},
+                    [" custom:Tag "],
+                ]
+            }
+        )
+        self.assertTrue(result.valid)
+        self.assertEqual(result.action, "unchanged")
+        self.assertEqual(
+            result.normalized_labels,
+            ["orchestrator:running", "custom:tag", "model:deep"],
+        )
+
+    def test_non_string_label_items_are_ignored(self) -> None:
+        result = validate_and_normalize_labels(
+            ["orchestrator:running", 123, None, {"labels": [True, {"oops": "x"}]}]
+        )
+        self.assertTrue(result.valid)
+        self.assertEqual(result.action, "unchanged")
+        self.assertEqual(result.normalized_labels, ["orchestrator:running"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

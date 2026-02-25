@@ -35,6 +35,35 @@ class CommandAdapterTests(unittest.TestCase):
         with self.assertRaises(CommandAdapterError):
             parse_command_envelope({"run_id": "run-1", "exit_code": 0, "status": "ok"})
 
+    def test_parse_command_envelope_normalizes_string_fields(self) -> None:
+        envelope = parse_command_envelope(
+            {
+                "run_id": "  run-1  ",
+                "exit_code": " 1 ",
+                "status": " FAILURE ",
+                "error_class": " timeout ",
+            }
+        )
+        self.assertEqual(envelope.run_id, "run-1")
+        self.assertEqual(envelope.exit_code, 1)
+        self.assertEqual(envelope.status, CommandStatus.FAILURE)
+        self.assertEqual(envelope.error_class, "timeout")
+
+    def test_parse_command_envelope_blank_error_class_maps_to_none(self) -> None:
+        envelope = parse_command_envelope(
+            {
+                "run_id": "run-1",
+                "exit_code": 0,
+                "status": "success",
+                "error_class": "   ",
+            }
+        )
+        self.assertIsNone(envelope.error_class)
+
+    def test_parse_command_envelope_rejects_fractional_exit_codes(self) -> None:
+        with self.assertRaises(CommandAdapterError):
+            parse_command_envelope({"run_id": "run-1", "exit_code": "1.5", "status": "success"})
+
     def test_success_status_zero_exit_is_success(self) -> None:
         envelope = parse_command_envelope({"run_id": "run-1", "exit_code": 0, "status": "success"})
         outcome = reconcile_command_envelope(envelope, terminal_success_observed=False)
