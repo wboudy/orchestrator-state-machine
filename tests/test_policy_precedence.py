@@ -69,11 +69,11 @@ class PolicyPrecedenceTests(unittest.TestCase):
         self.assertEqual(decision.result, DecisionResult.HUMAN_REQUIRED)
         self.assertEqual(decision.error_class, "policy_ambiguous")
 
-    def test_unknown_error_class_fails_closed(self) -> None:
+    def test_unknown_error_class_normalizes_to_unknown_error_retry(self) -> None:
         context = replace(_base_context(), error_class="totally_new_error")
         decision = evaluate_policy_precedence(context)
-        self.assertEqual(decision.result, DecisionResult.HUMAN_REQUIRED)
-        self.assertEqual(decision.error_class, "policy_ambiguous")
+        self.assertEqual(decision.result, DecisionResult.RETRY)
+        self.assertEqual(decision.error_class, "unknown_error")
 
 
 if __name__ == "__main__":

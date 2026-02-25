@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Tuple
 
+from watcher.error_classifier import ErrorClassifierError, classify_error
+
 
 PRECEDENCE_ORDER: Tuple[str, ...] = (
     "policy_load_parse",
@@ -17,25 +19,6 @@ PRECEDENCE_ORDER: Tuple[str, ...] = (
     "dedupe_suppression",
     "signature_trust_routing",
 )
-
-RETRIABLE_ERROR_CLASSES = {
-    "timeout",
-    "rate_limited",
-    "upstream_unavailable",
-    "network_error",
-    "state_conflict",
-    "stale_run",
-    "unknown_error",
-}
-
-NON_RETRIABLE_ERROR_CLASSES = {
-    "schema_invalid",
-    "auth_failed",
-    "permission_denied",
-    "bad_input",
-    "policy_invalid",
-}
-
 
 class DecisionResult(str, Enum):
     RETRY = "retry"
@@ -127,27 +110,37 @@ def evaluate_policy_precedence(context: PrecedenceContext) -> PrecedenceDecision
         )
     )
 
-    failure_result = _evaluate_failure_class(context.error_class)
+    failure_result, normalized_error_class = _evaluate_failure_class(context.error_class)
     if failure_result == "ambiguous":
-        return _fail_closed(path, "failure_class_retryable", "unknown error_class")
+        return _fail_closed(path, "failure_class_retryable", "invalid error_class value")
 
     if failure_result == "retriable":
-        path.append(DecisionStep("failure_class_retryable", "retriable", "error class retriable"))
+        if normalized_error_class is None:
+            return _fail_closed(path, "failure_class_retryable", "missing normalized error class")
+        path.append(
+            DecisionStep(
+                "failure_class_retryable",
+                "retriable",
+                f"error class retriable ({normalized_error_class})",
+            )
+        )
         if dead_letter:
             path.append(DecisionStep("failure_class_retryable", "escalate", "retry exhausted"))
         else:
             return PrecedenceDecision(
                 result=DecisionResult.RETRY,
-                error_class=context.error_class,
+                error_class=normalized_error_class,
                 model_route=None,
                 decision_path=tuple(path),
             )
     elif failure_result == "non_retriable":
+        if normalized_error_class is None:
+            return _fail_closed(path, "failure_class_retryable", "missing normalized error class")
         path.append(
             DecisionStep(
                 "failure_class_retryable",
                 "non_retriable",
-                "error class requires human escalation",
+                f"error class requires human escalation ({normalized_error_class})",
             )
         )
     else:
@@ -159,7 +152,7 @@ def evaluate_policy_precedence(context: PrecedenceContext) -> PrecedenceDecision
         path.append(DecisionStep("criticality_bypass", "bypass", "critical incident immediate"))
         return PrecedenceDecision(
             result=DecisionResult.HUMAN_REQUIRED,
-            error_class=context.error_class,
+            error_class=normalized_error_class,
             model_route=None,
             decision_path=tuple(path),
         )
@@ -171,7 +164,7 @@ def evaluate_policy_precedence(context: PrecedenceContext) -> PrecedenceDecision
         path.append(DecisionStep("risk_budget", "defer", "over noncritical budget"))
         return PrecedenceDecision(
             result=DecisionResult.HUMAN_REQUIRED_QUEUED,
-            error_class=context.error_class,
+            error_class=normalized_error_class,
             model_route=None,
             decision_path=tuple(path),
         )
@@ -183,7 +176,7 @@ def evaluate_policy_precedence(context: PrecedenceContext) -> PrecedenceDecision
         path.append(DecisionStep("time_window_routing", "queue", "off-hours non-critical"))
         return PrecedenceDecision(
             result=DecisionResult.HUMAN_REQUIRED_QUEUED,
-            error_class=context.error_class,
+            error_class=normalized_error_class,
             model_route=None,
             decision_path=tuple(path),
         )
@@ -195,7 +188,7 @@ def evaluate_policy_precedence(context: PrecedenceContext) -> PrecedenceDecision
         path.append(DecisionStep("dedupe_suppression", "suppress", "duplicate within dedupe window"))
         return PrecedenceDecision(
             result=DecisionResult.HUMAN_REQUIRED_SUPPRESSED,
-            error_class=context.error_class,
+            error_class=normalized_error_class,
             model_route=None,
             decision_path=tuple(path),
         )
@@ -212,7 +205,7 @@ def evaluate_policy_precedence(context: PrecedenceContext) -> PrecedenceDecision
     path.append(DecisionStep("signature_trust_routing", "route", f"selected {route.value}"))
     return PrecedenceDecision(
         result=DecisionResult.HUMAN_REQUIRED,
-        error_class=context.error_class,
+        error_class=normalized_error_class,
         model_route=route,
         decision_path=tuple(path),
     )
@@ -226,14 +219,16 @@ def _evaluate_dead_letter(retry_count: int | None, max_retries: int | None) -> T
     return retry_count >= max_retries, None
 
 
-def _evaluate_failure_class(error_class: str | None) -> str:
+def _evaluate_failure_class(error_class: str | None) -> Tuple[str, str | None]:
     if error_class is None:
-        return "missing"
-    if error_class in RETRIABLE_ERROR_CLASSES:
-        return "retriable"
-    if error_class in NON_RETRIABLE_ERROR_CLASSES:
-        return "non_retriable"
-    return "ambiguous"
+        return "missing", None
+    try:
+        classified = classify_error(error_class)
+    except ErrorClassifierError:
+        return "ambiguous", None
+    if classified.retryable:
+        return "retriable", classified.normalized_error_class
+    return "non_retriable", classified.normalized_error_class
 
 
 def _route_from_trust(

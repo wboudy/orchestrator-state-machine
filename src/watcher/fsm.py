@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
+from watcher.error_classifier import ErrorClassifierError, classify_error
+
 
 class FSMState(str, Enum):
     QUEUED = "QUEUED"
@@ -17,15 +19,6 @@ class FSMEvent(str, Enum):
     COMMAND_FAILED = "COMMAND_FAILED"
     COOLDOWN_EXPIRED = "COOLDOWN_EXPIRED"
     FORCE_HUMAN = "FORCE_HUMAN"
-
-
-NON_RETRIABLE_ERROR_CLASSES = {
-    "schema_invalid",
-    "auth_failed",
-    "permission_denied",
-    "bad_input",
-    "policy_invalid",
-}
 
 
 @dataclass(frozen=True)
@@ -89,8 +82,14 @@ def execute_transition(
         if not error_class:
             raise FSMTransitionError("COMMAND_FAILED requires error_class")
 
+        try:
+            classified = classify_error(error_class)
+        except ErrorClassifierError as exc:
+            raise FSMTransitionError(f"invalid error_class: {exc}") from exc
+
+        normalized_error_class = classified.normalized_error_class
         exhausted = retry_count >= max_retries
-        non_retriable = error_class in NON_RETRIABLE_ERROR_CLASSES
+        non_retriable = not classified.retryable
         if exhausted or non_retriable:
             return TransitionResult(
                 from_state=current_state,
@@ -98,7 +97,7 @@ def execute_transition(
                 add_labels=["needs:human", "orchestrator:dead"],
                 remove_labels=["needs:orchestrator", "orchestrator:running"],
                 reason="retry_exhausted_or_non_retriable",
-                error_class=error_class,
+                error_class=normalized_error_class,
             )
 
         if current_state != FSMState.RUNNING:
@@ -112,7 +111,7 @@ def execute_transition(
             add_labels=["orchestrator:failed"],
             remove_labels=["orchestrator:running"],
             reason="command_failure_retriable",
-            error_class=error_class,
+            error_class=normalized_error_class,
             next_retry_at=next_retry_at,
         )
 
@@ -142,4 +141,3 @@ def execute_transition(
         )
 
     raise FSMTransitionError(f"Unsupported event: {event}")
-
