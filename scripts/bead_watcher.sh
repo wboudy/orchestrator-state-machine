@@ -19,7 +19,7 @@ Options:
   --help      Show this help
 
 Environment variables:
-  MODEL                     Codex model (default: gpt-5-mini)
+  MODEL                     Codex model (default: gpt-5)
   MAX_CYCLES                Hard cap on cycles (default: 200)
   MAX_RETRIES_PER_ISSUE     Retries before escalation (default: 3)
   MAX_NO_PROGRESS_CYCLES    Repeated unchanged queue cap (default: 8)
@@ -63,7 +63,7 @@ for cmd in bd codex jq git; do
   fi
 done
 
-MODEL="${MODEL:-gpt-5-mini}"
+MODEL="${MODEL:-gpt-5}"
 MAX_CYCLES="${MAX_CYCLES:-200}"
 MAX_RETRIES_PER_ISSUE="${MAX_RETRIES_PER_ISSUE:-3}"
 MAX_NO_PROGRESS_CYCLES="${MAX_NO_PROGRESS_CYCLES:-8}"
@@ -153,48 +153,62 @@ Execution contract:
 EOF
 }
 
-retry_keys=()
-retry_vals=()
+retry_state=""
 
 get_retry_count() {
   local key="$1"
-  local i
-  for ((i = 0; i < ${#retry_keys[@]}; i++)); do
-    if [[ "${retry_keys[$i]}" == "$key" ]]; then
-      echo "${retry_vals[$i]}"
+  local line k v
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    k="${line%%=*}"
+    v="${line#*=}"
+    if [[ "$k" == "$key" ]]; then
+      echo "$v"
       return 0
     fi
-  done
+  done <<< "$retry_state"
   echo 0
 }
 
 set_retry_count() {
   local key="$1"
   local val="$2"
-  local i
-  for ((i = 0; i < ${#retry_keys[@]}; i++)); do
-    if [[ "${retry_keys[$i]}" == "$key" ]]; then
-      retry_vals[$i]="$val"
-      return 0
+  local line k
+  local found=0
+  local new_state=""
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    k="${line%%=*}"
+    if [[ "$k" == "$key" ]]; then
+      new_state+="${key}=${val}"$'\n'
+      found=1
+    else
+      new_state+="${line}"$'\n'
     fi
-  done
-  retry_keys+=("$key")
-  retry_vals+=("$val")
+  done <<< "$retry_state"
+
+  if [[ "$found" -eq 0 ]]; then
+    new_state+="${key}=${val}"$'\n'
+  fi
+
+  retry_state="$new_state"
 }
 
 clear_retry_count() {
   local key="$1"
-  local i
-  local new_keys=()
-  local new_vals=()
-  for ((i = 0; i < ${#retry_keys[@]}; i++)); do
-    if [[ "${retry_keys[$i]}" != "$key" ]]; then
-      new_keys+=("${retry_keys[$i]}")
-      new_vals+=("${retry_vals[$i]}")
+  local line k
+  local new_state=""
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    k="${line%%=*}"
+    if [[ "$k" != "$key" ]]; then
+      new_state+="${line}"$'\n'
     fi
-  done
-  retry_keys=("${new_keys[@]}")
-  retry_vals=("${new_vals[@]}")
+  done <<< "$retry_state"
+
+  retry_state="$new_state"
 }
 
 consecutive_failures=0
