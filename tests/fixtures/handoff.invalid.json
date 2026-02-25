@@ -1,0 +1,10 @@
+{
+  "origin_id": "BAD_ORIGIN",
+  "bug_id": "osm-4x3.1",
+  "error_signature": "BAD SIG",
+  "expected_minutes": 9999,
+  "estimated_loc": -1,
+  "touches_api_or_schema": "false",
+  "touches_security_or_auth": false,
+  "quick_test_available": true
+}

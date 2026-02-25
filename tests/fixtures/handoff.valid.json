@@ -1,0 +1,10 @@
+{
+  "origin_id": "osm-4x3",
+  "bug_id": "osm-4x3-1",
+  "error_signature": "schema_invalid_path",
+  "expected_minutes": 45,
+  "estimated_loc": 120,
+  "touches_api_or_schema": false,
+  "touches_security_or_auth": false,
+  "quick_test_available": true
+}

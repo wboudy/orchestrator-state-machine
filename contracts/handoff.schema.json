@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orchestrator-state-machine.local/contracts/handoff.schema.json",
+  "title": "Watcher Handoff Payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "origin_id",
+    "bug_id",
+    "error_signature",
+    "expected_minutes",
+    "estimated_loc",
+    "touches_api_or_schema",
+    "touches_security_or_auth",
+    "quick_test_available"
+  ],
+  "properties": {
+    "origin_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+    },
+    "bug_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+    },
+    "error_signature": {
+      "type": "string",
+      "pattern": "^[a-z0-9:_-]{8,128}$"
+    },
+    "expected_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 480
+    },
+    "estimated_loc": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5000
+    },
+    "touches_api_or_schema": {
+      "type": "boolean"
+    },
+    "touches_security_or_auth": {
+      "type": "boolean"
+    },
+    "quick_test_available": {
+      "type": "boolean"
+    }
+  }
+}
