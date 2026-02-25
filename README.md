@@ -65,6 +65,7 @@ bd doctor
 When implementation hits a non-trivial blocker, use:
 
 - `skills/bug-blocker-spinout/SKILL.md`
+- `prompts/bead-swarm-long-horizon.md` for long-horizon swarm execution loops
 
 This defines how to spin out a dedicated bug bead, block the parent bead, and switch focus safely.
 
