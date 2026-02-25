@@ -20,6 +20,7 @@ Options:
 
 Environment variables:
   MODEL                     Codex model (default: gpt-5)
+  MODEL_REASONING_EFFORT    Codex reasoning effort override (default: high)
   MAX_CYCLES                Hard cap on cycles (default: 200)
   MAX_RETRIES_PER_ISSUE     Retries before escalation (default: 3)
   MAX_NO_PROGRESS_CYCLES    Repeated unchanged queue cap (default: 8)
@@ -64,6 +65,7 @@ for cmd in bd codex jq git; do
 done
 
 MODEL="${MODEL:-gpt-5}"
+MODEL_REASONING_EFFORT="${MODEL_REASONING_EFFORT:-high}"
 MAX_CYCLES="${MAX_CYCLES:-200}"
 MAX_RETRIES_PER_ISSUE="${MAX_RETRIES_PER_ISSUE:-3}"
 MAX_NO_PROGRESS_CYCLES="${MAX_NO_PROGRESS_CYCLES:-8}"
@@ -249,19 +251,19 @@ for ((cycle = 1; cycle <= MAX_CYCLES; cycle++)); do
 
   codex_rc=0
   if [[ -n "$CODEX_SESSION_ID" ]]; then
-    if codex -C "$ROOT_DIR" exec resume "$CODEX_SESSION_ID" -m "$MODEL" - < "$prompt_file" > "$console_log" 2>&1; then
+    if codex -C "$ROOT_DIR" -c "model_reasoning_effort=\"$MODEL_REASONING_EFFORT\"" exec resume "$CODEX_SESSION_ID" -m "$MODEL" - < "$prompt_file" > "$console_log" 2>&1; then
       codex_rc=0
     else
       codex_rc=$?
     fi
   elif [[ "$CODEX_RESUME_LAST" == "1" ]]; then
-    if codex -C "$ROOT_DIR" exec resume --last -m "$MODEL" - < "$prompt_file" > "$console_log" 2>&1; then
+    if codex -C "$ROOT_DIR" -c "model_reasoning_effort=\"$MODEL_REASONING_EFFORT\"" exec resume --last -m "$MODEL" - < "$prompt_file" > "$console_log" 2>&1; then
       codex_rc=0
     else
       codex_rc=$?
     fi
   else
-    if codex -C "$ROOT_DIR" -m "$MODEL" -s "$CODEX_SANDBOX" -a "$CODEX_APPROVAL" exec -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+    if codex -C "$ROOT_DIR" -c "model_reasoning_effort=\"$MODEL_REASONING_EFFORT\"" -m "$MODEL" -s "$CODEX_SANDBOX" -a "$CODEX_APPROVAL" exec -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
       codex_rc=0
     else
       codex_rc=$?

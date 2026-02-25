@@ -80,6 +80,7 @@ Useful overrides:
 
 ```bash
 MODEL=gpt-5 MAX_RETRIES_PER_ISSUE=2 scripts/bead_watcher.sh
+MODEL_REASONING_EFFORT=high scripts/bead_watcher.sh
 HUMAN_ESCALATION_CMD='echo "Escalate $WATCHER_ISSUE_ID via $WATCHER_ESCALATION_ID"' scripts/bead_watcher.sh
 PROMPT_TEMPLATE=prompts/long-horizon-bead-work.md scripts/bead_watcher.sh
 ```
