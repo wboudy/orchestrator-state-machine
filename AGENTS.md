@@ -45,6 +45,21 @@ Use this order:
 
 Do not silently skip failures. Every unresolved blocker must have a bead.
 
+## Optional Watcher Mode
+
+For unattended execution, run:
+
+```bash
+scripts/bead_watcher.sh
+```
+
+Watcher expectations:
+
+- It picks one ready bead per cycle and invokes `codex exec`.
+- It must stop when no ready beads remain.
+- It enforces max retries/no-progress caps to prevent infinite loops.
+- For complex bugs discovered mid-implementation, it should create a dedicated bug bead, block the parent bead, and prioritize the bug bead next.
+
 ## Quick Reference
 
 ```bash

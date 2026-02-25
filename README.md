@@ -60,6 +60,28 @@ bd dep cycles
 bd doctor
 ```
 
+## Autonomous Watcher Runner
+
+Use the local watcher to churn ready beads through `codex exec` until the queue is empty:
+
+```bash
+scripts/bead_watcher.sh
+```
+
+Key behavior:
+
+- Processes one ready bead per cycle.
+- Stops automatically when no ready beads remain.
+- Uses finite guards (`MAX_CYCLES`, `MAX_RETRIES_PER_ISSUE`, `MAX_NO_PROGRESS_CYCLES`) to avoid infinite loops.
+- If an issue repeatedly fails, it auto-creates a human-escalation bead and blocks the parent issue.
+
+Useful overrides:
+
+```bash
+MODEL=gpt-5 MAX_RETRIES_PER_ISSUE=2 scripts/bead_watcher.sh
+HUMAN_ESCALATION_CMD='echo "Escalate $WATCHER_ISSUE_ID via $WATCHER_ESCALATION_ID"' scripts/bead_watcher.sh
+```
+
 ## Troubleshooting Quick Hits
 
 - `bd ready` is empty:
