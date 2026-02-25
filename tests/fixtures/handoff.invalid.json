@@ -1,6 +1,6 @@
 {
   "origin_id": "BAD_ORIGIN",
-  "bug_id": "osm-4x3.1",
+  "bug_id": "OSM 4x3.1",
   "error_signature": "BAD SIG",
   "expected_minutes": 9999,
   "estimated_loc": -1,

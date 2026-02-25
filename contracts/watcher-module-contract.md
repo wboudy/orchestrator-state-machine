@@ -47,6 +47,9 @@ HandoffPayload:
   touches_security_or_auth: bool
   quick_test_available: bool
 
+Identifier constraints:
+- `origin_id` and `bug_id` MUST match `^[a-z0-9][a-z0-9.-]{1,63}$` (dotted child bead IDs are valid).
+
 StateRecord:
   state: QUEUED|RUNNING|RETRY_WAIT|DONE|HUMAN_REQUIRED
   attempt: int

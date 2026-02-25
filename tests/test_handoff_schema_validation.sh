@@ -24,6 +24,7 @@ if [[ $invalid_rc -eq 0 ]]; then
 fi
 
 echo "$invalid_out" | rg -q "origin_id invalid"
+echo "$invalid_out" | rg -q "bug_id invalid"
 echo "$invalid_out" | rg -q "error_signature invalid"
 echo "$invalid_out" | rg -q "expected_minutes invalid"
 echo "$invalid_out" | rg -q "estimated_loc invalid"

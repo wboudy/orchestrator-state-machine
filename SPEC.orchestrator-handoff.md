@@ -77,8 +77,8 @@ All required handoff fields MUST pass these checks before any execution:
 
 | Field | Type | Constraint |
 |---|---|---|
-| `origin_id` | string | `^[a-z0-9][a-z0-9-]{1,63}$` |
-| `bug_id` | string | `^[a-z0-9][a-z0-9-]{1,63}$` |
+| `origin_id` | string | `^[a-z0-9][a-z0-9.-]{1,63}$` |
+| `bug_id` | string | `^[a-z0-9][a-z0-9.-]{1,63}$` |
 | `error_signature` | string | 8..128 chars, lowercase `[a-z0-9:_-]` |
 | `expected_minutes` | integer | 1..480 |
 | `estimated_loc` | integer | 1..5000 |
@@ -87,6 +87,8 @@ All required handoff fields MUST pass these checks before any execution:
 | `quick_test_available` | boolean | strict boolean |
 
 If validation fails, watcher MUST set `needs:human` and `error_class=schema_invalid`, and MUST NOT invoke orchestrator command.
+
+Note: dotted child bead IDs (for example `osm-4x3.1`) are valid for `origin_id` and `bug_id`.
 
 ## 5. Finite State Machine
 

@@ -19,8 +19,8 @@ errors="$(
     def is_bool: type == "boolean";
 
     [
-      (if (.origin_id | is_str_re("^[a-z0-9][a-z0-9-]{1,63}$") | not) then "origin_id invalid" else empty end),
-      (if (.bug_id | is_str_re("^[a-z0-9][a-z0-9-]{1,63}$") | not) then "bug_id invalid" else empty end),
+      (if (.origin_id | is_str_re("^[a-z0-9][a-z0-9.-]{1,63}$") | not) then "origin_id invalid" else empty end),
+      (if (.bug_id | is_str_re("^[a-z0-9][a-z0-9.-]{1,63}$") | not) then "bug_id invalid" else empty end),
       (if (.error_signature | is_str_re("^[a-z0-9:_-]{8,128}$") | not) then "error_signature invalid" else empty end),
       (if (.expected_minutes | is_int_range(1; 480) | not) then "expected_minutes invalid" else empty end),
       (if (.estimated_loc | is_int_range(1; 5000) | not) then "estimated_loc invalid" else empty end),
