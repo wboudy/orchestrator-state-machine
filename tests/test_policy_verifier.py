@@ -56,6 +56,19 @@ class PolicyVerifierTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("precedence_ambiguous", [entry.code for entry in result.errors])
 
+    def test_out_of_order_precedence_is_rejected(self) -> None:
+        swapped = list(SPEC_PRECEDENCE_ORDER)
+        swapped[6], swapped[7] = swapped[7], swapped[6]
+        result = verify_policy_static({}, precedence_order=tuple(swapped))
+        self.assertFalse(result.ok)
+        self.assertIn("precedence_ambiguous", [entry.code for entry in result.errors])
+
+    def test_unknown_precedence_step_is_rejected(self) -> None:
+        custom = SPEC_PRECEDENCE_ORDER[:-1] + ("mystery_step",)
+        result = verify_policy_static({}, precedence_order=custom)
+        self.assertFalse(result.ok)
+        self.assertIn("precedence_ambiguous", [entry.code for entry in result.errors])
+
     def test_verify_policy_or_raise_on_error(self) -> None:
         with self.assertRaises(PolicyVerificationError):
             verify_policy_or_raise({}, precedence_order=SPEC_PRECEDENCE_ORDER[:-1])

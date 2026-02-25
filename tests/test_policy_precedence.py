@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from watcher.policy_precedence import (
     DecisionResult,
     ModelRoute,
+    PRECEDENCE_ORDER,
     PrecedenceContext,
     evaluate_policy_precedence,
 )
@@ -74,6 +75,26 @@ class PolicyPrecedenceTests(unittest.TestCase):
         decision = evaluate_policy_precedence(context)
         self.assertEqual(decision.result, DecisionResult.RETRY)
         self.assertEqual(decision.error_class, "unknown_error")
+
+    def test_missing_budget_decision_fails_closed(self) -> None:
+        context = replace(_base_context(), retry_count=3, error_class="timeout", risk_budget_allows=None)
+        decision = evaluate_policy_precedence(context)
+        self.assertEqual(decision.result, DecisionResult.HUMAN_REQUIRED)
+        self.assertEqual(decision.error_class, "policy_ambiguous")
+        self.assertEqual(decision.decision_path[-1].step, "risk_budget")
+
+    def test_invalid_retry_counters_fail_closed(self) -> None:
+        context = replace(_base_context(), retry_count=-1)
+        decision = evaluate_policy_precedence(context)
+        self.assertEqual(decision.result, DecisionResult.HUMAN_REQUIRED)
+        self.assertEqual(decision.error_class, "policy_ambiguous")
+        self.assertEqual(decision.decision_path[-1].step, "dead_letter_guard")
+
+    def test_decision_path_order_matches_spec_prefix(self) -> None:
+        context = replace(_base_context(), retry_count=3, error_class="auth_failed", is_critical=True)
+        decision = evaluate_policy_precedence(context)
+        executed_steps = tuple(step.step for step in decision.decision_path)
+        self.assertEqual(executed_steps, PRECEDENCE_ORDER[: len(executed_steps)])
 
 
 if __name__ == "__main__":
