@@ -12,6 +12,14 @@ Required:
 Optional:
 - `error_class`
 
+Normalization and validation:
+
+- `run_id` must be a non-empty string after trimming.
+- `status` is trimmed/lowercased and must resolve to `success|failure|partial`.
+- `exit_code` accepts integer-like values (`int`, integral `float`, numeric string) and is coerced to `int`.
+- Fractional, non-finite, boolean, or empty `exit_code` values are invalid.
+- `error_class` is optional; blank strings normalize to `null`.
+
 ## Reconciliation Rules
 
 1. `status=success` with `exit_code=0` -> `watcher_result=success`

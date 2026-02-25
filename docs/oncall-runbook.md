@@ -8,7 +8,7 @@ Operational response guide for watcher/orchestrator automation stages.
 
 1. Confirm `git status` is clean and branch is up to date with `origin/main`.
 2. Run health checks:
-   - `python3 -m unittest discover -s tests -p 'test_*.py'`
+   - `pytest -q`
    - `./tests/test_handoff_schema_validation.sh`
 3. Inspect latest run artifacts under `.beads/orchestrator-runs/`.
 
@@ -21,6 +21,8 @@ Operational response guide for watcher/orchestrator automation stages.
 2. Replay suspicious runs:
    - `python3 scripts/replay_handoff.py --run-file <path> --dry-run`
 3. If replay parity fails, pause automation and open a gate blocker bead.
+4. For malformed runtime payload suspicions, run focused checks:
+   - `pytest -q tests/test_command_adapter.py tests/test_label_invariants.py tests/test_handoff_parser.py`
 
 ## Rollback Procedure (State Files)
 
@@ -41,4 +43,5 @@ Escalate to `needs:human` immediately for:
 - `schema_invalid`
 - `state_divergence`
 - `redaction_failed`
+- `fsm_invalid`
 - repeated replay parity mismatch

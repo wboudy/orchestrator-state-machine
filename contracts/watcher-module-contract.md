@@ -1,6 +1,6 @@
 # Watcher Runtime Module Contract
 
-This contract defines module boundaries, public interfaces, and lifecycle rules for WP-1/WP-2 core watcher runtime.
+This contract defines module boundaries, public interfaces, and lifecycle rules for the watcher runtime.
 
 ## Scope
 
@@ -13,25 +13,29 @@ This contract defines module boundaries, public interfaces, and lifecycle rules 
 
 | Module | Responsibility | Must Not Do |
 |---|---|---|
-| `watcher.queue_scanner` | Poll candidate beads and extract potential handoff blocks. | Execute transitions directly. |
-| `watcher.handoff_parser` | Parse/validate handoff payload and return normalized object. | Mutate bead labels/state. |
-| `watcher.fsm_engine` | Enforce transition preconditions and compute next state/action. | Read raw notes directly. |
-| `watcher.lock_manager` | Acquire/renew/release lease lock and detect stale owners. | Decide policy/escalation behavior. |
-| `watcher.state_store` | Read/write idempotency state keyed by `handoff_key`. | Perform command dispatch. |
-| `watcher.invariant_guard` | Validate label/state invariants and normalize/stop if invalid. | Bypass fail-closed rules. |
+| `watcher.poll_loop` | Select eligible queued beads with valid handoff blocks. | Mutate bead labels/state directly. |
+| `watcher.handoff_parser` | Parse/validate handoff payload and return normalized object. | Dispatch commands or update bead state. |
+| `watcher.label_invariants` | Normalize mixed-shape labels and enforce state-label invariants. | Bypass human-escalation fail-closed path. |
+| `watcher.fsm` | Enforce transition preconditions and compute next state/action labels. | Parse raw note content. |
+| `watcher.command_adapter` | Normalize command envelopes and reconcile status/exit-code mismatches. | Decide retry cadence directly. |
+| `watcher.lease_lock` | Acquire/heartbeat/release lease ownership for active work. | Classify policy/error outcomes. |
+| `watcher.state_store` | Persist idempotent state records with optimistic version checks. | Execute orchestration commands. |
 
 ## Public Interfaces
 
 ```text
-queue_scanner.find_candidates(now_utc, limit) -> list[BeadSnapshot]
-handoff_parser.parse_and_validate(notes_text) -> HandoffPayload | ValidationError
-fsm_engine.plan_transition(snapshot, handoff, state_record, policy_eval) -> TransitionPlan
-lock_manager.acquire(owner_id, now_utc) -> LeaseHandle | LockBusy
-lock_manager.heartbeat(lease_handle, now_utc) -> LeaseHandle | LeaseExpired
-lock_manager.release(lease_handle) -> bool
-state_store.load(handoff_key) -> StateRecord | None
-state_store.save(handoff_key, state_record, expected_version) -> SaveResult
-invariant_guard.check(snapshot) -> InvariantOk | InvariantViolation
+poll_loop.select_eligible_queued(snapshots, limit) -> list[BeadSnapshot]
+handoff_parser.parse_handoff_block(notes_text) -> HandoffPayload | HandoffValidationError
+label_invariants.validate_and_normalize_labels(labels) -> InvariantResult
+fsm.execute_transition(current_state, event, ...) -> TransitionResult
+command_adapter.parse_command_envelope(payload) -> CommandEnvelope
+command_adapter.reconcile_command_envelope(envelope, terminal_success_observed) -> CommandReconciliation
+lease_lock.LeaseLockManager.acquire(owner_id, now_utc) -> LeaseRecord | LeaseBusyError
+lease_lock.LeaseLockManager.heartbeat(owner_id, now_utc) -> LeaseRecord | LeaseExpiredError
+lease_lock.LeaseLockManager.release(owner_id) -> bool
+state_store.HandoffStateStore.load(handoff_key) -> StateRecord | None
+state_store.HandoffStateStore.save(handoff_key, record, expected_version) -> SaveResult
+state_store.HandoffStateStore.update_atomic(handoff_key, expected_version, fn) -> SaveResult
 ```
 
 ## Core Data Types
@@ -57,24 +61,26 @@ StateRecord:
   next_retry_at: RFC3339 UTC timestamp|null
   last_error_class: string|null
   owner_id: string|null
+  version: int
 ```
 
 ## Lifecycle Contract
 
-1. `queue_scanner` returns candidate.
-2. `lock_manager.acquire` must succeed before processing candidate.
-3. `handoff_parser.parse_and_validate` must pass before any transition command.
-4. `invariant_guard.check` runs before transition planning.
-5. `fsm_engine.plan_transition` returns deterministic transition/action.
-6. `state_store.save` commits state change atomically with optimistic version check.
-7. `lock_manager.heartbeat` is renewed while work is active; release at cycle end.
+1. `poll_loop` selects candidates with `needs:orchestrator` and valid handoff schema.
+2. `lease_lock.acquire` must succeed before processing a candidate.
+3. `handoff_parser.parse_handoff_block` must pass before transition planning.
+4. `label_invariants.validate_and_normalize_labels` runs before FSM decisions.
+5. `fsm.execute_transition` computes deterministic label/state changes.
+6. `command_adapter.parse_command_envelope` and `reconcile_command_envelope` normalize command outcomes.
+7. `state_store.save/update_atomic` commits state changes with version checks.
+8. `lease_lock.heartbeat` is renewed during work; lease is released at cycle end.
 
 ## Invariants
 
-- A bead cannot be in `RUNNING` and `DONE` labels simultaneously.
+- A bead cannot have ambiguous primary state labels.
 - A `handoff_key` cannot have two active owners.
 - A transition requiring command dispatch cannot run without a valid `HandoffPayload`.
-- Invalid/ambiguous input always fails closed to `HUMAN_REQUIRED`.
+- Invalid/ambiguous input fails closed to `HUMAN_REQUIRED` (`needs:human`).
 
 ## Invalid Input Behavior
 
@@ -82,13 +88,15 @@ StateRecord:
   - classify `error_class=schema_invalid`
   - add `needs:human`
   - do not dispatch orchestrator command
-- Schema field violation:
-  - no retries
-  - transition to `HUMAN_REQUIRED`
-  - append run artifact describing violated fields
+- Invalid command envelope payload:
+  - reject envelope parse
+  - treat as failure path and escalate per classifier/FSM policy
+- Ambiguous label state:
+  - normalize safe known combinations
+  - otherwise escalate with `error_class=fsm_invalid`
 
-## Validation Artifact
+## Validation Artifacts
 
-- Normative schema file: `contracts/handoff.schema.json`
-- Validator: `scripts/validate_handoff_schema.sh`
-- Test: `tests/test_handoff_schema_validation.sh`
+- Normative handoff schema: `contracts/handoff.schema.json`
+- Validator script: `scripts/validate_handoff_schema.sh`
+- Contract tests: `tests/test_handoff_schema_validation.sh`
