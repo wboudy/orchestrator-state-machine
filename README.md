@@ -82,6 +82,14 @@ MODEL=gpt-5 MAX_RETRIES_PER_ISSUE=2 scripts/bead_watcher.sh
 HUMAN_ESCALATION_CMD='echo "Escalate $WATCHER_ISSUE_ID via $WATCHER_ESCALATION_ID"' scripts/bead_watcher.sh
 ```
 
+To keep reactivating the same Codex session instead of creating fresh runs:
+
+```bash
+CODEX_SESSION_ID=<session-id> scripts/bead_watcher.sh
+# or
+CODEX_RESUME_LAST=1 scripts/bead_watcher.sh
+```
+
 ## Troubleshooting Quick Hits
 
 - `bd ready` is empty:

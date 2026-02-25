@@ -27,6 +27,8 @@ Environment variables:
   SLEEP_SECONDS             Delay between cycles (default: 5)
   CODEX_SANDBOX             Codex sandbox mode (default: workspace-write)
   CODEX_APPROVAL            Codex approval mode (default: never)
+  CODEX_SESSION_ID          Resume this Codex session id each cycle (default: empty)
+  CODEX_RESUME_LAST         If 1, use codex exec resume --last when session id empty
   HUMAN_ESCALATION_CMD      Optional shell command for human escalation
   QUIET_HOURS_START         Quiet hours start (0-23, default: 22)
   QUIET_HOURS_END           Quiet hours end (0-23, default: 8)
@@ -68,6 +70,8 @@ MAX_CONSECUTIVE_FAILURES="${MAX_CONSECUTIVE_FAILURES:-5}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-5}"
 CODEX_SANDBOX="${CODEX_SANDBOX:-workspace-write}"
 CODEX_APPROVAL="${CODEX_APPROVAL:-never}"
+CODEX_SESSION_ID="${CODEX_SESSION_ID:-}"
+CODEX_RESUME_LAST="${CODEX_RESUME_LAST:-0}"
 HUMAN_ESCALATION_CMD="${HUMAN_ESCALATION_CMD:-}"
 QUIET_HOURS_START="${QUIET_HOURS_START:-22}"
 QUIET_HOURS_END="${QUIET_HOURS_END:-8}"
@@ -165,7 +169,22 @@ Execution contract:
 6) Follow AGENTS.md session-end requirements including sync and push.
 EOF
 
-  if codex -C "$ROOT_DIR" -m "$MODEL" -s "$CODEX_SANDBOX" -a "$CODEX_APPROVAL" exec -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+  codex_rc=0
+  if [[ -n "$CODEX_SESSION_ID" ]]; then
+    if ! codex -C "$ROOT_DIR" exec resume "$CODEX_SESSION_ID" -m "$MODEL" -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+      codex_rc=$?
+    fi
+  elif [[ "$CODEX_RESUME_LAST" == "1" ]]; then
+    if ! codex -C "$ROOT_DIR" exec resume --last -m "$MODEL" -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+      codex_rc=$?
+    fi
+  else
+    if ! codex -C "$ROOT_DIR" -m "$MODEL" -s "$CODEX_SANDBOX" -a "$CODEX_APPROVAL" exec -o "$output_file" - < "$prompt_file" > "$console_log" 2>&1; then
+      codex_rc=$?
+    fi
+  fi
+
+  if [[ "$codex_rc" -eq 0 ]]; then
     status="$(bd show "$issue_id" --json | jq -r '.[0].status')"
     if [[ "$status" == "closed" || "$status" == "blocked" ]]; then
       log "Issue $issue_id ended in status=$status (success)"
@@ -179,7 +198,7 @@ EOF
   else
     retries[$issue_id]=$((attempts + 1))
     consecutive_failures=$((consecutive_failures + 1))
-    log "codex exec failed for $issue_id; retry ${retries[$issue_id]}/$MAX_RETRIES_PER_ISSUE"
+    log "codex run failed for $issue_id (rc=$codex_rc); retry ${retries[$issue_id]}/$MAX_RETRIES_PER_ISSUE"
   fi
 
   snapshot_after="$(ready_snapshot)"
