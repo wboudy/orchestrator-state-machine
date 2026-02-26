@@ -26,6 +26,7 @@ This repository is in active implementation mode with runtime modules and tests 
 - `tests/`: unit and integration coverage for runtime contracts.
 - `contracts/`: normative interface and schema contracts.
 - `docs/oncall-runbook.md`: operator response and escalation playbook.
+- `docs/integration-guide.md`: practical guide for embedding this runtime in another project.
 - `.beads/`: issue graph and dependency state.
 
 ## Prerequisites
@@ -44,6 +45,14 @@ bd onboard
 pytest -q
 bd ready
 ```
+
+## Integrating Into Another Project
+
+Use `src/watcher` as the runtime library and wire your project-specific queue/label/command IO around it.
+
+Start here:
+
+- `docs/integration-guide.md`
 
 ## Daily Workflow (Human)
 
